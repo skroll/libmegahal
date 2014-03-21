@@ -40,7 +40,7 @@ int megahal_swaplist_init(megahal_ctx_t, megahal_swaplist_t *);
 int megahal_swaplist_add_swap(megahal_swaplist_t, const char *, const char *);
 
 int megahal_learn(megahal_personality_t, const char *);
-char * megahal_reply(megahal_personality_t pers, const char *str);
+int megahal_reply(megahal_personality_t pers, const char *str, char *outstr, size_t outlen);
 
 #endif // LIBMEGAHAL_H
 

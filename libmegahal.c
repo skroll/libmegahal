@@ -33,36 +33,36 @@
 #define MIN(a,b) ((a)<(b))?(a):(b)
 
 typedef struct {
-	uint8_t length;
-	char *word;
+	uint8_t  length;
+	char    *word;
 } STRING;
 
 typedef struct {
-	uint32_t size;
-	STRING *entry;
+	uint32_t  size;
+	STRING   *entry;
 	uint16_t *index;
 } DICTIONARY;
 
 typedef struct {
-	uint16_t size;
-	STRING *from;
-	STRING *to;
+	uint16_t  size;
+	STRING   *from;
+	STRING   *to;
 } SWAP;
 
 typedef struct NODE {
-	uint16_t symbol;
-	uint32_t usage;
-	uint16_t count;
-	uint16_t branch;
+	uint16_t      symbol;
+	uint32_t      usage;
+	uint16_t      count;
+	uint16_t      branch;
 	struct NODE **tree;
 } TREE;
 
 typedef struct {
-	uint8_t order;
-	TREE *forward;
-	TREE *backward;
-	TREE **context;
-	DICTIONARY *dictionary;
+	uint8_t      order;
+	TREE        *forward;
+	TREE        *backward;
+	TREE       **context;
+	DICTIONARY  *dictionary;
 } MODEL;
 
 static void capitalize(char *string);
@@ -73,44 +73,44 @@ static void upper(char *);
 static int seed(megahal_personality_t pers, DICTIONARY *keys);
 static bool boundary(char *string, int position);
 static bool dissimilar(DICTIONARY *words1, DICTIONARY *words2);
-static char * make_output(DICTIONARY *words);
+static void make_output(DICTIONARY *words, char *outstr, size_t outlen);
 static void initialize_context(MODEL *model);
 static void update_context(MODEL *model, int symbol);
-static MODEL * new_model(int order);
-static void update_model(MODEL *model, int symbol);
-static void learn(MODEL *, DICTIONARY *);
-static bool load_model(const char *filename, MODEL *model);
-static void free_model(MODEL *model);
+static MODEL * new_model(megahal_ctx_t ctx, int order);
+static void update_model(megahal_ctx_t ctx, MODEL *model, int symbol);
+static void learn(megahal_ctx_t, MODEL *, DICTIONARY *);
+static bool load_model(megahal_ctx_t, const char *filename, MODEL *model);
+static void free_model(megahal_ctx_t, MODEL *model);
 static void save_model(const char *modelname, MODEL *model);
 static void save_word(FILE *file, STRING word);
-static void load_word(FILE *file, DICTIONARY *dictionary);
-static uint16_t add_word(DICTIONARY *dictionary, STRING word);
-static void make_words(char *input, DICTIONARY *words);
+static void load_word(megahal_ctx_t ctx, FILE *file, DICTIONARY *dictionary);
+static uint16_t add_word(megahal_ctx_t, DICTIONARY *dictionary, STRING word);
+static void make_words(megahal_ctx_t ctx, char *input, DICTIONARY *words);
 static uint16_t find_word(DICTIONARY *, STRING);
-static void free_word(STRING word);
-static void free_words(DICTIONARY *words);
+static void free_word(megahal_ctx_t ctx, STRING word);
+static void free_words(megahal_ctx_t ctx, DICTIONARY *words);
 static DICTIONARY * make_keywords(megahal_personality_t pers, DICTIONARY *words);
-static TREE * add_symbol(TREE *tree, uint16_t symbol);
+static TREE * add_symbol(megahal_ctx_t ctx, TREE *tree, uint16_t symbol);
 static TREE * find_symbol(TREE *node, int symbol);
-static TREE * find_symbol_add(TREE *node, int symbol);
-static void add_node(TREE *tree, TREE *node, int position);
-static DICTIONARY *new_dictionary(void);
-static void initialize_dictionary(DICTIONARY *);
-static void load_dictionary(FILE *file, DICTIONARY *dictionary);
+static TREE * find_symbol_add(megahal_ctx_t ctx, TREE *node, int symbol);
+static void add_node(megahal_ctx_t ctx, TREE *tree, TREE *node, int position);
+static DICTIONARY *new_dictionary(megahal_ctx_t);
+static void initialize_dictionary(megahal_ctx_t ctx, DICTIONARY *);
+static void load_dictionary(megahal_ctx_t ctx, FILE *file, DICTIONARY *dictionary);
 static int search_dictionary(DICTIONARY *dictionary, STRING word, bool *find);
-static void free_dictionary(DICTIONARY *);
+static void free_dictionary(megahal_ctx_t, DICTIONARY *);
 static void save_dictionary(FILE *file, DICTIONARY *dictionary);
-static SWAP * new_swap(void);
-static void add_swap(SWAP *list, const char *s, const char *d);
-static void free_swap(SWAP *swap);
-static void load_tree(FILE *file, TREE *node);
-static void free_tree(TREE *);
+static SWAP * new_swap(megahal_ctx_t);
+static void add_swap(megahal_ctx_t ctx, SWAP *list, const char *s, const char *d);
+static void free_swap(megahal_ctx_t ctx, SWAP *swap);
+static void load_tree(megahal_ctx_t ctx, FILE *file, TREE *node);
+static void free_tree(megahal_ctx_t ctx, TREE *);
 static void save_tree(FILE *file, TREE *node);
-static TREE * new_node(void);
+static TREE * new_node(megahal_ctx_t);
 static int search_node(TREE *node, int symbol, bool *found_symbol);
 static int wordcmp(STRING word1, STRING word2);
-static char * generate_reply(megahal_personality_t pers, DICTIONARY *words);
-static DICTIONARY * reply(megahal_personality_t pers, DICTIONARY *keys);
+static void generate_reply(megahal_personality_t pers, DICTIONARY *words, char *, size_t);
+static void reply(megahal_personality_t pers, DICTIONARY *keys, DICTIONARY *replies);
 static float evaluate_reply(MODEL *model, DICTIONARY *keys, DICTIONARY *words);
 static void add_key(megahal_personality_t pers, DICTIONARY *keys, STRING word);
 static void add_aux(megahal_personality_t pers, DICTIONARY *keys, STRING word);
@@ -147,7 +147,6 @@ static void *
 megahal_malloc(void *ctx, size_t sz)
 {
 	(void)ctx;
-	printf("malloc %lu\n", sz);
 	return malloc(sz);
 }
 
@@ -155,7 +154,6 @@ static void *
 megahal_realloc(void *ctx, void *ptr, size_t sz)
 {
 	(void)ctx;
-	printf("realloc %lu\n", sz);
 	return realloc(ptr, sz);
 }
 
@@ -163,7 +161,6 @@ static void
 megahal_free(void *ctx, void *ptr)
 {
 	(void)ctx;
-
 	free(ptr);
 }
 
@@ -174,14 +171,47 @@ static megahal_alloc_funcs_t default_alloc_funcs = {
 	NULL
 };
 
+static inline void *
+af_malloc(megahal_ctx_t ctx, size_t sz)
+{
+	return ctx->af->malloc(ctx->af->ctx, sz);
+}
+
+static inline void *
+af_realloc(megahal_ctx_t ctx, void *ptr, size_t sz)
+{
+	return ctx->af->realloc(ctx->af->ctx, ptr, sz);
+}
+
+static inline void
+af_free(megahal_ctx_t ctx, void *ptr)
+{
+	ctx->af->free(ctx->af->ctx, ptr);
+}
+
+static inline char *
+af_strdup(megahal_ctx_t ctx, const char *s)
+{
+	char *r = af_malloc(ctx, strlen(s) + 1);
+
+	if (r) {
+		strcpy(r, s);
+	}
+
+	return r;
+}
+
 int
 megahal_ctx_init(megahal_ctx_t *ctx_out, megahal_alloc_funcs_t *af)
 {
+	srand48(time(NULL));
+
 	if (!af) {
 		af = &default_alloc_funcs;
 	}
 
-	megahal_ctx_t ctx = af->malloc(NULL, sizeof(struct megahal_ctx));
+	// Must use af directly here, ctx hasn't been created yet
+	megahal_ctx_t ctx = af->malloc(af->ctx, sizeof(struct megahal_ctx));
 
 	if (!ctx) {
 		return -1;
@@ -197,7 +227,7 @@ megahal_ctx_init(megahal_ctx_t *ctx_out, megahal_alloc_funcs_t *af)
 int
 megahal_personality_init(megahal_ctx_t ctx, megahal_personality_t *pers_out)
 {
-	megahal_personality_t pers = ctx->af->malloc(NULL, sizeof(struct megahal_personality));
+	megahal_personality_t pers = af_malloc(ctx, sizeof(struct megahal_personality));
 
 	if (!pers) {
 		return -1;
@@ -266,14 +296,14 @@ int
 megahal_model_init(megahal_ctx_t ctx, megahal_model_t *model_out)
 {
 	static int order = 5;
-	megahal_model_t model = ctx->af->malloc(NULL, sizeof(struct megahal_model));
+	megahal_model_t model = af_malloc(ctx, sizeof(struct megahal_model));
 
 	if (!ctx) {
 		return -1;
 	}
 
 	model->ctx = ctx;
-	model->model = new_model(order);
+	model->model = new_model(ctx, order);
 
 	*model_out = model;
 
@@ -289,7 +319,7 @@ megahal_model_load_file(megahal_ctx_t ctx, const char *path, megahal_model_t *mo
 		return -1;
 	}
 
-	if (load_model(path, model->model) == false) {
+	if (load_model(ctx, path, model->model) == false) {
 		return -1;
 	}
 
@@ -317,14 +347,14 @@ megahal_model_save_file(megahal_model_t model, const char *path)
 int
 megahal_dict_init(megahal_ctx_t ctx, megahal_dict_t *dict_out)
 {
-	megahal_dict_t dict = ctx->af->malloc(NULL, sizeof(struct megahal_dict));
+	megahal_dict_t dict = af_malloc(ctx, sizeof(struct megahal_dict));
 
 	if (!dict) {
 		return -1;
 	}
 
 	dict->ctx = ctx;
-	dict->dict = new_dictionary();
+	dict->dict = new_dictionary(ctx);
 
 	if (!dict->dict) {
 		free(dict);
@@ -353,8 +383,8 @@ megahal_dict_add_word(megahal_dict_t dict_in, const char *str)
 	dict = dict_in->dict;
 
 	word.length = strlen(str);
-	word.word = strdup(str);
-	add_word(dict, word);
+	word.word = af_strdup(dict_in->ctx, str);
+	add_word(dict_in->ctx, dict, word);
 
 	return 0;
 }
@@ -362,17 +392,17 @@ megahal_dict_add_word(megahal_dict_t dict_in, const char *str)
 int
 megahal_swaplist_init(megahal_ctx_t ctx, megahal_swaplist_t *swap_out)
 {
-	megahal_swaplist_t swap = ctx->af->malloc(NULL, sizeof(struct megahal_swaplist));
+	megahal_swaplist_t swap = af_malloc(ctx, sizeof(struct megahal_swaplist));
 
 	if (!swap) {
 		return -1;
 	}
 
 	swap->ctx = ctx;
-	swap->swap = new_swap();
+	swap->swap = new_swap(ctx);
 
 	if (!swap->swap) {
-		free(swap);
+		af_free(ctx, swap);
 		return -1;
 	}
 
@@ -397,7 +427,7 @@ megahal_swaplist_add_swap(megahal_swaplist_t swap_in, const char *from,
 	}
 
 	swap = swap_in->swap;
-	add_swap(swap, from, to);
+	add_swap(swap_in->ctx, swap, from, to);
 
 	return 0;
 }
@@ -410,44 +440,42 @@ megahal_learn(megahal_personality_t pers, const char *str)
 	strncpy(buf, str, 2048);
 	buf[2047] = '\0';
 
-	DICTIONARY *words = new_dictionary();
+	DICTIONARY *words = new_dictionary(pers->ctx);
 
 	upper(buf);
-	make_words(buf, words);
-	learn(pers->model->model, words);
+	make_words(pers->ctx, buf, words);
+	learn(pers->ctx, pers->model->model, words);
 
-	free_dictionary(words);
+	free_dictionary(pers->ctx, words);
 
 	return 0;
 }
 
-char *
-megahal_reply(megahal_personality_t pers, const char *str)
+int
+megahal_reply(megahal_personality_t pers, const char *str, char *outstr, size_t outlen)
 {
 	// TODO: do this correctly
 	char buf[2048];
 	strncpy(buf, str, 2048);
 	buf[2047] = '\0';
 
-	char *output = NULL;
-
-	DICTIONARY *words = new_dictionary();
+	DICTIONARY *words = new_dictionary(pers->ctx);
 
 	upper(buf);
-	make_words(buf, words);
-	learn(pers->model->model, words);
-	output = generate_reply(pers, words);
-	capitalize(output);
+	make_words(pers->ctx, buf, words);
+	learn(pers->ctx, pers->model->model, words);
+	generate_reply(pers, words, outstr, outlen);
+	capitalize(outstr);
 
-	return output;
+	return 0;
 }
 
 static DICTIONARY *
-new_dictionary(void)
+new_dictionary(megahal_ctx_t ctx)
 {
 	DICTIONARY *dictionary = NULL;
 
-	dictionary = (DICTIONARY *)malloc(sizeof(DICTIONARY));
+	dictionary = (DICTIONARY *)af_malloc(ctx, sizeof(DICTIONARY));
 
 	if (dictionary == NULL) {
 		return NULL;
@@ -461,11 +489,11 @@ new_dictionary(void)
 }
 
 static MODEL *
-new_model(int order)
+new_model(megahal_ctx_t ctx, int order)
 {
 	MODEL *model = NULL;
 
-	model = (MODEL *)malloc(sizeof(MODEL));
+	model = (MODEL *)af_malloc(ctx, sizeof(MODEL));
 	if (model==NULL) {
 		// TODO: Error
 		// error("new_model", "Unable to allocate model.");
@@ -473,9 +501,9 @@ new_model(int order)
 	}
 
 	model->order = order;
-	model->forward = new_node();
-	model->backward = new_node();
-	model->context = (TREE **)malloc(sizeof(TREE *) * (order + 2));
+	model->forward = new_node(ctx);
+	model->backward = new_node(ctx);
+	model->context = (TREE **)af_malloc(ctx, sizeof(TREE *) * (order + 2));
 
 	if (model->context == NULL) {
 		// TODO: Error
@@ -484,8 +512,8 @@ new_model(int order)
 	}
 
 	initialize_context(model);
-	model->dictionary = new_dictionary();
-	initialize_dictionary(model->dictionary);
+	model->dictionary = new_dictionary(ctx);
+	initialize_dictionary(ctx, model->dictionary);
 
 	return model;
 
@@ -516,34 +544,34 @@ update_context(MODEL *model, int symbol)
 }
 
 void
-free_model(MODEL *model)
+free_model(megahal_ctx_t ctx, MODEL *model)
 {
 	if (model == NULL) {
 		return;
 	}
 
 	if (model->forward != NULL) {
-		free_tree(model->forward);
+		free_tree(ctx, model->forward);
 	}
 
 	if (model->backward != NULL) {
-		free_tree(model->backward);
+		free_tree(ctx, model->backward);
 	}
 
 	if (model->context != NULL) {
-		free(model->context);
+		af_free(ctx, model->context);
 	}
 
 	if (model->dictionary != NULL) {
-		free_dictionary(model->dictionary);
-		free(model->dictionary);
+		free_dictionary(ctx, model->dictionary);
+		af_free(ctx, model->dictionary);
 	}
 
-	free(model);
+	af_free(ctx, model);
 }
 
 static void
-learn(MODEL *model, DICTIONARY *words)
+learn(megahal_ctx_t ctx, MODEL *model, DICTIONARY *words)
 {
 	register unsigned int i;
 	register int j;
@@ -562,12 +590,12 @@ learn(MODEL *model, DICTIONARY *words)
 	for (i = 0; i < words->size; ++i) {
 		/* Add the symbol to the model's dictionary if necessary, and then
 		 * update the forward model accordingly. */
-		symbol = add_word(model->dictionary, words->entry[i]);
-		update_model(model, symbol);
+		symbol = add_word(ctx, model->dictionary, words->entry[i]);
+		update_model(ctx, model, symbol);
 	}
 
 	/* Add the sentence-terminating symbol. */
-	update_model(model, 1);
+	update_model(ctx, model, 1);
 
 	/* Train the model in the backwards direction.  Start by initializing
 	 * the context of the model. */
@@ -578,17 +606,17 @@ learn(MODEL *model, DICTIONARY *words)
 		/* Find the symbol in the model's dictionary, and then update the
 		 * backward model accordingly. */
 		symbol = find_word(model->dictionary, words->entry[j]);
-		update_model(model, symbol);
+		update_model(ctx, model, symbol);
 	}
 
 	/* Add the sentence-terminating symbol. */
-	update_model(model, 1);
+	update_model(ctx, model, 1);
 
 	return;
 }
 
 static bool
-load_model(const char *filename, MODEL *model)
+load_model(megahal_ctx_t ctx, const char *filename, MODEL *model)
 {
 	FILE *file;
 	char cookie[16];
@@ -614,9 +642,9 @@ load_model(const char *filename, MODEL *model)
 	}
 
 	fread(&(model->order), sizeof(uint8_t), 1, file);
-	load_tree(file, model->forward);
-	load_tree(file, model->backward);
-	load_dictionary(file, model->dictionary);
+	load_tree(ctx, file, model->forward);
+	load_tree(ctx, file, model->backward);
+	load_dictionary(ctx, file, model->dictionary);
 
 	return true;
 fail:
@@ -626,7 +654,7 @@ fail:
 }
 
 static void
-update_model(MODEL *model, int symbol)
+update_model(megahal_ctx_t ctx, MODEL *model, int symbol)
 {
 	register unsigned int i;
 
@@ -634,7 +662,7 @@ update_model(MODEL *model, int symbol)
 	 * symbol. */
 	for (i = (model->order + 1); i > 0; --i) {
 		if (model->context[i - 1] != NULL) {
-			model->context[i] = add_symbol(model->context[i - 1], (uint16_t)symbol);
+			model->context[i] = add_symbol(ctx, model->context[i - 1], (uint16_t)symbol);
 		}
 	}
 
@@ -642,7 +670,7 @@ update_model(MODEL *model, int symbol)
 }
 
 static uint16_t
-add_word(DICTIONARY *dictionary, STRING word)
+add_word(megahal_ctx_t ctx, DICTIONARY *dictionary, STRING word)
 {
 	register int i;
 	int position;
@@ -659,9 +687,9 @@ add_word(DICTIONARY *dictionary, STRING word)
 
 	/* Allocate one more entry for the word index */
 	if (dictionary->index == NULL) {
-		dictionary->index=(uint16_t *)malloc(sizeof(uint16_t) * (dictionary->size));
+		dictionary->index = (uint16_t *)af_malloc(ctx, sizeof(uint16_t) * (dictionary->size));
 	} else {
-		dictionary->index=(uint16_t *)realloc((uint16_t *)(dictionary->index), sizeof(uint16_t) * (dictionary->size));
+		dictionary->index = (uint16_t *)af_realloc(ctx, (uint16_t *)(dictionary->index), sizeof(uint16_t) * (dictionary->size));
 	}
 
 	if (dictionary->index == NULL) {
@@ -672,9 +700,9 @@ add_word(DICTIONARY *dictionary, STRING word)
 
 	/* Allocate one more entry for the word array */
 	if (dictionary->entry == NULL) {
-		dictionary->entry = (STRING *)malloc(sizeof(STRING) * (dictionary->size));
+		dictionary->entry = (STRING *)af_malloc(ctx, sizeof(STRING) * (dictionary->size));
 	} else {
-		dictionary->entry = (STRING *)realloc((STRING *)(dictionary->entry), sizeof(STRING) * (dictionary->size));
+		dictionary->entry = (STRING *)af_realloc(ctx, (STRING *)(dictionary->entry), sizeof(STRING) * (dictionary->size));
 	}
 
 	if (dictionary->entry == NULL) {
@@ -685,7 +713,7 @@ add_word(DICTIONARY *dictionary, STRING word)
 
 	/* Copy the new word into the word array */
 	dictionary->entry[dictionary->size - 1].length = word.length;
-	dictionary->entry[dictionary->size - 1].word = (char *)malloc(sizeof(char) * (word.length));
+	dictionary->entry[dictionary->size - 1].word = (char *)af_malloc(ctx, sizeof(char) * (word.length));
 	if (dictionary->entry[dictionary->size - 1].word == NULL) {
 		// error("add_word", "Unable to allocate the word.");
 		goto fail;
@@ -697,11 +725,11 @@ add_word(DICTIONARY *dictionary, STRING word)
 
 	/* Shuffle the word index to keep it sorted alphabetically */
 	for (i = (dictionary->size - 1); i > position; --i) {
-		dictionary->index[i] = dictionary->index[i-1];
+		dictionary->index[i] = dictionary->index[i - 1];
 	}
 
 	/* Copy the new symbol identifier into the word index */
-	dictionary->index[position]=dictionary->size-1;
+	dictionary->index[position] = dictionary->size - 1;
 
 succeed:
 	return dictionary->index[position];
@@ -724,13 +752,13 @@ save_word(FILE *file, STRING word)
 
 
 static void
-load_word(FILE *file, DICTIONARY *dictionary)
+load_word(megahal_ctx_t ctx, FILE *file, DICTIONARY *dictionary)
 {
 	register unsigned int i;
 	STRING word;
 
 	fread(&(word.length), sizeof(uint8_t), 1, file);
-	word.word = (char *)malloc(sizeof(char) * word.length);
+	word.word = (char *)af_malloc(ctx, sizeof(char) * word.length);
 
 	if (word.word == NULL) {
 		// TODO: Error
@@ -742,17 +770,17 @@ load_word(FILE *file, DICTIONARY *dictionary)
 		fread(&(word.word[i]), sizeof(char), 1, file);
 	}
 
-	add_word(dictionary, word);
-	free(word.word);
+	add_word(ctx, dictionary, word);
+	af_free(ctx, word.word);
 }
 
 static void
-make_words(char *input, DICTIONARY *words)
+make_words(megahal_ctx_t ctx, char *input, DICTIONARY *words)
 {
 	int offset = 0;
 
 	/* Clear the entries in the dictionary */
-	free_dictionary(words);
+	free_dictionary(ctx, words);
 
 	/* If the string is empty then do nothing, for it contains no words. */
 	if (strlen(input) == 0) {
@@ -767,9 +795,9 @@ make_words(char *input, DICTIONARY *words)
 		if (boundary(input, offset)) {
 			/* Add the word to the dictionary */
 			if (words->entry == NULL) {
-				words->entry = (STRING *)malloc((words->size + 1) * sizeof(STRING));
+				words->entry = (STRING *)af_malloc(ctx, (words->size + 1) * sizeof(STRING));
 			} else {
-				words->entry = (STRING *)realloc(words->entry, (words->size + 1) * sizeof(STRING));
+				words->entry = (STRING *)af_realloc(ctx, words->entry, (words->size + 1) * sizeof(STRING));
 			}
 
 			if (words->entry == NULL) {
@@ -797,9 +825,9 @@ make_words(char *input, DICTIONARY *words)
 	 * character. */
 	if (isalnum(words->entry[words->size-1].word[0])) {
 		if (words->entry == NULL) {
-			words->entry = (STRING *)malloc((words->size + 1) * sizeof(STRING));
+			words->entry = (STRING *)af_malloc(ctx, (words->size + 1) * sizeof(STRING));
 		} else {
-			words->entry = (STRING *)realloc(words->entry, (words->size + 1) * sizeof(STRING));
+			words->entry = (STRING *)af_realloc(ctx, words->entry, (words->size + 1) * sizeof(STRING));
 		}
 
 		if (words->entry == NULL) {
@@ -811,7 +839,7 @@ make_words(char *input, DICTIONARY *words)
 		words->entry[words->size].length = 1;
 		words->entry[words->size].word = ".";
 		++words->size;
-	} else if(strchr("!.?", words->entry[words->size - 1].word[words->entry[words->size - 1].length - 1])==NULL) {
+	} else if (strchr("!.?", words->entry[words->size - 1].word[words->entry[words->size - 1].length - 1]) == NULL) {
 		words->entry[words->size - 1].length = 1;
 		words->entry[words->size - 1].word = ".";
 	}
@@ -835,13 +863,13 @@ find_word(DICTIONARY *dictionary, STRING word)
 }
 
 static void
-free_word(STRING word)
+free_word(megahal_ctx_t ctx, STRING word)
 {
-	free(word.word);
+	af_free(ctx, word.word);
 }
 
 static void
-free_words(DICTIONARY *words)
+free_words(megahal_ctx_t ctx, DICTIONARY *words)
 {
 	register unsigned int i;
 
@@ -851,23 +879,23 @@ free_words(DICTIONARY *words)
 
 	if (words->entry != NULL) {
 		for (i = 0; i < words->size; ++i) {
-			free_word(words->entry[i]);
+			free_word(ctx, words->entry[i]);
 		}
 	}
 }
 
 static void
-initialize_dictionary(DICTIONARY *dictionary)
+initialize_dictionary(megahal_ctx_t ctx, DICTIONARY *dictionary)
 {
 	STRING word = { 7, "<ERROR>" };
 	STRING end = { 5, "<FIN>" };
 
-	(void)add_word(dictionary, word);
-	(void)add_word(dictionary, end);
+	(void)add_word(ctx, dictionary, word);
+	(void)add_word(ctx, dictionary, end);
 }
 
 static void
-load_dictionary(FILE *file, DICTIONARY *dictionary)
+load_dictionary(megahal_ctx_t ctx, FILE *file, DICTIONARY *dictionary)
 {
 	register int i;
 	int size;
@@ -875,7 +903,7 @@ load_dictionary(FILE *file, DICTIONARY *dictionary)
 	fread(&size, sizeof(uint32_t), 1, file);
 
 	for (i = 0; i < size; ++i) {
-		load_word(file, dictionary);
+		load_word(ctx, file, dictionary);
 	}
 }
 
@@ -936,27 +964,27 @@ notfound:
 }
 
 static void
-free_dictionary(DICTIONARY *dictionary)
+free_dictionary(megahal_ctx_t ctx, DICTIONARY *dictionary)
 {
 	if (dictionary == NULL) {
 		return;
 	}
 
 	if (dictionary->entry != NULL) {
-		free(dictionary->entry);
+		af_free(ctx, dictionary->entry);
 		dictionary->entry = NULL;
 	}
 
 	if (dictionary->index != NULL) {
-		free(dictionary->index);
-		dictionary->index=NULL;
+		af_free(ctx, dictionary->index);
+		dictionary->index = NULL;
 	}
 
 	dictionary->size = 0;
 }
 
 static void
-free_swap(SWAP *swap)
+free_swap(megahal_ctx_t ctx, SWAP *swap)
 {
 	register int i;
 
@@ -965,22 +993,22 @@ free_swap(SWAP *swap)
 	}
 
 	for (i = 0; i < swap->size; ++i) {
-		free_word(swap->from[i]);
-		free_word(swap->to[i]);
+		free_word(ctx, swap->from[i]);
+		free_word(ctx, swap->to[i]);
 	}
 
-	free(swap->from);
-	free(swap->to);
-	free(swap);
+	af_free(ctx, swap->from);
+	af_free(ctx, swap->to);
+	af_free(ctx, swap);
 }
 
 static TREE *
-new_node(void)
+new_node(megahal_ctx_t ctx)
 {
 	TREE *node = NULL;
 
 	/* Allocate memory for the new node */
-	node = (TREE *)malloc(sizeof(TREE));
+	node = (TREE *)af_malloc(ctx, sizeof(TREE));
 	if (node == NULL) {
 		// TODO: error
 		//error("new_node", "Unable to allocate the node.");
@@ -1005,7 +1033,7 @@ fail:
 }
 
 static void
-load_tree(FILE *file, TREE *node)
+load_tree(megahal_ctx_t ctx, FILE *file, TREE *node)
 {
 	register unsigned int i;
 
@@ -1018,7 +1046,7 @@ load_tree(FILE *file, TREE *node)
 		return;
 	}
 
-	node->tree = (TREE **)malloc(sizeof(TREE *) * (node->branch));
+	node->tree = (TREE **)af_malloc(ctx, sizeof(TREE *) * (node->branch));
 	if (node->tree == NULL) {
 		//error("load_tree", "Unable to allocate subtree");
 		// TODO: Error
@@ -1026,13 +1054,13 @@ load_tree(FILE *file, TREE *node)
 	}
 
 	for (i = 0; i < node->branch; ++i) {
-		node->tree[i] = new_node();
-		load_tree(file, node->tree[i]);
+		node->tree[i] = new_node(ctx);
+		load_tree(ctx, file, node->tree[i]);
 	}
 }
 
 static void
-free_tree(TREE *tree)
+free_tree(megahal_ctx_t ctx, TREE *tree)
 {
 	register unsigned int i;
 
@@ -1042,21 +1070,21 @@ free_tree(TREE *tree)
 
 	if (tree->tree!=NULL) {
 		for (i = 0; i < tree->branch; ++i) {
-			free_tree(tree->tree[i]);
+			free_tree(ctx, tree->tree[i]);
 		}
 
-		free(tree->tree);
+		af_free(ctx, tree->tree);
 	}
 
-	free(tree);
+	af_free(ctx, tree);
 }
 
 static SWAP *
-new_swap(void)
+new_swap(megahal_ctx_t ctx)
 {
 	SWAP *list;
 
-	list = (SWAP *)malloc(sizeof(SWAP));
+	list = (SWAP *)af_malloc(ctx, sizeof(SWAP));
 
 	if (list == NULL) {
 		// error("new_swap", "Unable to allocate swap");
@@ -1072,12 +1100,12 @@ new_swap(void)
 }
 
 static void
-add_swap(SWAP *list, const char *s, const char *d)
+add_swap(megahal_ctx_t ctx, SWAP *list, const char *s, const char *d)
 {
 	list->size += 1;
 
 	if (list->from == NULL) {
-		list->from = (STRING *)malloc(sizeof(STRING));
+		list->from = (STRING *)af_malloc(ctx, sizeof(STRING));
 
 		if (list->from == NULL) {
 			// error("add_swap", "Unable to allocate list->from");
@@ -1087,7 +1115,7 @@ add_swap(SWAP *list, const char *s, const char *d)
 	}
 
 	if (list->to == NULL) {
-		list->to = (STRING *)malloc(sizeof(STRING));
+		list->to = (STRING *)af_malloc(ctx, sizeof(STRING));
 		if (list->to == NULL) {
 			//error("add_swap", "Unable to allocate list->to");
 			//TODO: Error
@@ -1095,14 +1123,14 @@ add_swap(SWAP *list, const char *s, const char *d)
 		}
 	}
 
-	list->from = (STRING *)realloc(list->from, sizeof(STRING) * (list->size));
+	list->from = (STRING *)af_realloc(ctx, list->from, sizeof(STRING) * (list->size));
 	if (list->from == NULL) {
 		//error("add_swap", "Unable to reallocate from");
 		//TODO: Error
 		return;
 	}
 
-	list->to = (STRING *)realloc(list->to, sizeof(STRING) * (list->size));
+	list->to = (STRING *)af_realloc(ctx, list->to, sizeof(STRING) * (list->size));
 	if (list->to==NULL) {
 		//error("add_swap", "Unable to reallocate to");
 		//TODO: Error
@@ -1110,9 +1138,9 @@ add_swap(SWAP *list, const char *s, const char *d)
 	}
 
 	list->from[list->size - 1].length = strlen(s);
-	list->from[list->size - 1].word = strdup(s);
+	list->from[list->size - 1].word = af_strdup(ctx, s);
 	list->to[list->size - 1].length = strlen(d);
-	list->to[list->size - 1].word = strdup(d);
+	list->to[list->size - 1].word = af_strdup(ctx, d);
 }
 
 static int
@@ -1192,12 +1220,12 @@ boundary(char *string, int position)
 }
 
 static TREE *
-add_symbol(TREE *tree, uint16_t symbol)
+add_symbol(megahal_ctx_t ctx, TREE *tree, uint16_t symbol)
 {
 	TREE *node = NULL;
 
 	/* Search for the symbol in the subtree of the tree node. */
-	node = find_symbol_add(tree, symbol);
+	node = find_symbol_add(ctx, tree, symbol);
 
 	/* Increment the symbol counts */
 	if (node->count < 65535) {
@@ -1225,7 +1253,7 @@ find_symbol(TREE *node, int symbol)
 }
 
 static TREE *
-find_symbol_add(TREE *node, int symbol)
+find_symbol_add(megahal_ctx_t ctx, TREE *node, int symbol)
 {
 	register unsigned int i;
 	TREE *found = NULL;
@@ -1238,9 +1266,9 @@ find_symbol_add(TREE *node, int symbol)
 	if (found_symbol == true) {
 		found=node->tree[i];
 	} else {
-		found=new_node();
+		found=new_node(ctx);
 		found->symbol = symbol;
-		add_node(node, found, i);
+		add_node(ctx, node, found, i);
 	}
 
 	return found;
@@ -1295,16 +1323,16 @@ notfound:
 }
 
 static void
-add_node(TREE *tree, TREE *node, int position)
+add_node(megahal_ctx_t ctx, TREE *tree, TREE *node, int position)
 {
 	register int i;
 
 	/* Allocate room for one more child node, which may mean allocating
 	 * the sub-tree from scratch. */
 	if (tree->tree == NULL) {
-		tree->tree=(TREE **)malloc(sizeof(TREE *) * (tree->branch + 1));
+		tree->tree = (TREE **)af_malloc(ctx, sizeof(TREE *) * (tree->branch + 1));
 	} else {
-		tree->tree=(TREE **)realloc((TREE **)(tree->tree),sizeof(TREE *) * (tree->branch + 1));
+		tree->tree = (TREE **)af_realloc(ctx, (TREE **)(tree->tree), sizeof(TREE *) * (tree->branch + 1));
 	}
 
 	if (tree->tree == NULL) {
@@ -1316,7 +1344,7 @@ add_node(TREE *tree, TREE *node, int position)
 	/* Shuffle the nodes down so that we can insert the new node at the
 	 * subtree index given by position. */
 	for (i = tree->branch; i > position; --i) {
-		tree->tree[i]=tree->tree[i - 1];
+		tree->tree[i] = tree->tree[i - 1];
 	}
 
 	/* Add the new node to the sub-tree. */
@@ -1324,8 +1352,8 @@ add_node(TREE *tree, TREE *node, int position)
 	tree->branch += 1;
 }
 
-static char *
-generate_reply(megahal_personality_t pers, DICTIONARY *words)
+static void
+generate_reply(megahal_personality_t pers, DICTIONARY *words, char *outstr, size_t outlen)
 {
 	DICTIONARY *dummy = NULL;
 	MODEL *model = pers->model->model;
@@ -1333,8 +1361,6 @@ generate_reply(megahal_personality_t pers, DICTIONARY *words)
 	DICTIONARY *keywords;
 	float surprise;
 	float max_surprise;
-	char *output;
-	static char *output_none = NULL;
 	int count;
 	int basetime;
 	int timeout = TIMEOUT;
@@ -1342,22 +1368,16 @@ generate_reply(megahal_personality_t pers, DICTIONARY *words)
 	/* Create an array of keywords from the words in the user's input */
 	keywords = make_keywords(pers, words);
 
-	/* Make sure some sort of reply exists */
-	if (output_none == NULL) {
-		output_none = malloc(40);
-		if (output_none != NULL) {
-			strcpy(output_none, "I don't know enough to answer you yet!");
-		}
-	}
+	strcpy(outstr, "I don't know enough to answer you yet!");
 
-	output = output_none;
-
-	dummy = new_dictionary();
-	replywords = reply(pers, dummy);
-	free_dictionary(dummy);
+	dummy = new_dictionary(pers->ctx);
+	replywords = new_dictionary(pers->ctx);
+	reply(pers, dummy, replywords);
+	free_dictionary(pers->ctx, dummy);
+	af_free(pers->ctx, dummy);
 
 	if (dissimilar(words, replywords) == true) {
-		output = make_output(replywords);
+		make_output(replywords, outstr, outlen);
 	}
 
 	/* Loop for the specified waiting period, generating and evaluating
@@ -1367,12 +1387,12 @@ generate_reply(megahal_personality_t pers, DICTIONARY *words)
 	basetime = time(NULL);
 #if 1
 	do {
-		replywords = reply(pers, keywords);
+		reply(pers, keywords, replywords);
 		surprise = evaluate_reply(model, keywords, replywords);
 		++count;
 		if ((surprise>max_surprise) && (dissimilar(words, replywords) == true)) {
 			max_surprise = surprise;
-			output = make_output(replywords);
+			make_output(replywords, outstr, outlen);
 		}
 	} while ((time(NULL) - basetime) < timeout);
 #else
@@ -1388,11 +1408,11 @@ generate_reply(megahal_personality_t pers, DICTIONARY *words)
 	}
 #endif
 
-	free_dictionary(keywords);
-	free(keywords);
+	free_dictionary(pers->ctx, replywords);
+	af_free(pers->ctx, replywords);
 
-	/* Return the best answer we generated */
-	return output;
+	free_dictionary(pers->ctx, keywords);
+	af_free(pers->ctx, keywords);
 }
 
 static DICTIONARY *
@@ -1404,7 +1424,7 @@ make_keywords(megahal_personality_t pers, DICTIONARY *words)
 	register unsigned int j;
 	int c;
 
-	keys = new_dictionary();
+	keys = new_dictionary(pers->ctx);
 
 	for (i = 0; i < words->size; ++i) {
 		/* Find the symbol ID of the word.  If it doesn't exist in the
@@ -1460,33 +1480,16 @@ dissimilar(DICTIONARY *words1, DICTIONARY *words2)
 	return false;
 }
 
-static char *
-make_output(DICTIONARY *words)
+static void
+make_output(DICTIONARY *words, char *outstr, size_t outlen)
 {
-	static char *output = NULL;
 	register unsigned int i;
 	register int j;
 	int length;
-	static char *output_none = NULL;
-
-	if (output_none == NULL) {
-		output_none = malloc(40);
-	}
-
-	if (output == NULL) {
-		output = (char *)malloc(sizeof(char));
-		if (output == NULL) {
-			//error("make_output", "Unable to allocate output");
-			// TODO: Error
-			return output_none;
-		}
-	}
 
 	if (words->size == 0) {
-		if (output_none != NULL) {
-			strcpy(output_none, "I am utterly speechless!");
-		}
-		return output_none;
+		strcpy(outstr, "I am utterly speechless!");
+		return;
 	}
 
 	length = 1;
@@ -1494,6 +1497,13 @@ make_output(DICTIONARY *words)
 		length += words->entry[i].length;
 	}
 
+	if (outlen <= (size_t)length) {
+		printf("ERRROR!\n");
+		abort();
+		return;
+	}
+
+#if 0
 	output = (char *)realloc(output, sizeof(char) * length);
 
 	if (output == NULL) {
@@ -1505,18 +1515,17 @@ make_output(DICTIONARY *words)
 
 		return output_none;
 	}
+#endif
 
 	length = 0;
 
 	for (i = 0; i < words->size; ++i) {
 		for (j = 0; j < words->entry[i].length; ++j) {
-			output[length++] = words->entry[i].word[j];
+			outstr[length++] = words->entry[i].word[j];
 		}
 	}
 
-	output[length] = '\0';
-
-	return output;
+	outstr[length] = '\0';
 }
 
 static float
@@ -1601,20 +1610,15 @@ evaluate_reply(MODEL *model, DICTIONARY *keys, DICTIONARY *words)
 	return entropy;
 }
 
-static DICTIONARY *
-reply(megahal_personality_t pers, DICTIONARY *keys)
+static void
+reply(megahal_personality_t pers, DICTIONARY *keys, DICTIONARY *replies)
 {
 	MODEL *model = pers->model->model;
-	static DICTIONARY *replies = NULL;
 	register int i;
 	int symbol;
 	bool start = true;
 
-	if (replies == NULL) {
-		replies = new_dictionary();
-	}
-
-	free_dictionary(replies);
+	free_dictionary(pers->ctx, replies);
 
 	/* Start off by making sure that the model's context is empty. */
 	initialize_context(model);
@@ -1638,15 +1642,15 @@ reply(megahal_personality_t pers, DICTIONARY *keys)
 
 		/* Append the symbol to the reply dictionary. */
 		if (replies->entry == NULL) {
-			replies->entry = (STRING *)malloc((replies->size + 1) * sizeof(STRING));
+			replies->entry = (STRING *)af_malloc(pers->ctx, (replies->size + 1) * sizeof(STRING));
 		} else {
-			replies->entry=(STRING *)realloc(replies->entry, (replies->size + 1) * sizeof(STRING));
+			replies->entry = (STRING *)af_realloc(pers->ctx, replies->entry, (replies->size + 1) * sizeof(STRING));
 		}
 
 		if (replies->entry == NULL) {
 			//error("reply", "Unable to reallocate dictionary");
 			// TODO: error
-			return NULL;
+			return;
 		}
 
 		replies->entry[replies->size].length = model->dictionary->entry[symbol].length;
@@ -1682,15 +1686,15 @@ reply(megahal_personality_t pers, DICTIONARY *keys)
 
 		/* Prepend the symbol to the reply dictionary. */
 		if (replies->entry == NULL) {
-			replies->entry = (STRING *)malloc((replies->size + 1) * sizeof(STRING));
+			replies->entry = (STRING *)af_malloc(pers->ctx, (replies->size + 1) * sizeof(STRING));
 		} else {
-			replies->entry = (STRING *)realloc(replies->entry, (replies->size + 1) * sizeof(STRING));
+			replies->entry = (STRING *)af_realloc(pers->ctx, replies->entry, (replies->size + 1) * sizeof(STRING));
 		}
 
 		if (replies->entry==NULL) {
 			//error("reply", "Unable to reallocate dictionary");
 			//TODO: error
-			return NULL;
+			return;
 		}
 
 		/* Shuffle everything up for the prepend. */
@@ -1706,8 +1710,6 @@ reply(megahal_personality_t pers, DICTIONARY *keys)
 		/* Extend the current context of the model with the current symbol. */
 		update_context(model, symbol);
 	}
-
-	return replies;
 }
 
 static int
@@ -1753,13 +1755,6 @@ seed(megahal_personality_t pers, DICTIONARY *keys)
 static int
 rnd(int range)
 {
-	static bool flag = false;
-
-	if (flag == false) {
-		srand48(time(NULL));
-	}
-
-	flag = true;
 	return floor(drand48() * (double)range);
 }
 
@@ -1848,7 +1843,7 @@ add_key(megahal_personality_t pers, DICTIONARY *keys, STRING word)
 		return;
 	}
 
-	add_word(keys, word);
+	add_word(pers->ctx, keys, word);
 }
 
 static void
@@ -1871,7 +1866,7 @@ add_aux(megahal_personality_t pers, DICTIONARY *keys, STRING word)
 		return;
 	}
 
-	add_word(keys, word);
+	add_word(pers->ctx, keys, word);
 }
 
 static void
@@ -1946,5 +1941,4 @@ capitalize(char *string)
 		}
 	}
 }
-
 
