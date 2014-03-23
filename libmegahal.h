@@ -31,16 +31,16 @@ int megahal_personality_set_swap(megahal_personality_t, megahal_swaplist_t);
 
 int megahal_model_init(megahal_ctx_t, megahal_model_t *);
 int megahal_model_load_file(megahal_ctx_t, const char *, megahal_model_t *);
-int megahal_model_save_file(megahal_model_t, const char *);
+int megahal_model_save_file(megahal_ctx_t, megahal_model_t, const char *);
 
 int megahal_dict_init(megahal_ctx_t, megahal_dict_t *);
-int megahal_dict_add_word(megahal_dict_t, const char *);
+int megahal_dict_add_word(megahal_ctx_t, megahal_dict_t, const char *);
 
 int megahal_swaplist_init(megahal_ctx_t, megahal_swaplist_t *);
-int megahal_swaplist_add_swap(megahal_swaplist_t, const char *, const char *);
+int megahal_swaplist_add_swap(megahal_ctx_t, megahal_swaplist_t, const char *, const char *);
 
-int megahal_learn(megahal_personality_t, const char *);
-int megahal_reply(megahal_personality_t pers, const char *str, char *outstr, size_t outlen);
+int megahal_learn(megahal_ctx_t, megahal_personality_t, const char *);
+int megahal_reply(megahal_ctx_t, megahal_personality_t, const char *, char *, size_t);
 
 #endif // LIBMEGAHAL_H
 
