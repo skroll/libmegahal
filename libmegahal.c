@@ -1690,25 +1690,24 @@ reply(megahal_ctx_t ctx, megahal_personality_t pers, struct megahal_dict *keys, 
 static int
 seed(megahal_personality_t pers, struct megahal_dict *keys)
 {
-	struct megahal_model *model = pers->model;
 	register unsigned int i;
 	int symbol;
 	unsigned int stop;
 
 	/* Fix, thanks to Mark Tarrabain */
-	if (model->context[0]->branch == 0) {
+	if (pers->model->context[0]->branch == 0) {
 		symbol= 0;
 	} else {
-		symbol = model->context[0]->tree[rnd(model->context[0]->branch)]->symbol;
+		symbol = pers->model->context[0]->tree[rnd(pers->model->context[0]->branch)]->symbol;
 	}
 
-	if (keys->size > 0) {
+	if (keys && keys->size > 0) {
 		i = rnd(keys->size);
 		stop = i;
 		while (1) {
-			if ((find_word(model->dictionary, keys->entry[i]) != 0) &&
+			if ((find_word(pers->model->dictionary, keys->entry[i]) != 0) &&
 			    (find_word(pers->aux, keys->entry[i]) == 0)) {
-				symbol = find_word(model->dictionary, keys->entry[i]);
+				symbol = find_word(pers->model->dictionary, keys->entry[i]);
 				return symbol;
 			}
 
