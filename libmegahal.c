@@ -828,6 +828,10 @@ find_word(struct megahal_dict *dictionary, STRING word)
 	int position;
 	bool found;
 
+	if (!dictionary) {
+		return 0;
+	}
+
 	position = search_dictionary(dictionary, word, &found);
 
 	if (found == true) {
@@ -892,7 +896,7 @@ search_dictionary(struct megahal_dict *dictionary, STRING word, bool *find)
 	int compar;
 
 	/* If the dictionary is empty, then obviously the word won't be found */
-	if (dictionary->size == 0) {
+	if (!dictionary || dictionary->size == 0) {
 		position = 0;
 		goto notfound;
 	}
@@ -1330,7 +1334,6 @@ add_node(megahal_ctx_t ctx, TREE *tree, TREE *node, int position)
 static void
 generate_reply(megahal_ctx_t ctx, megahal_personality_t pers, struct megahal_dict *words, char *outstr, size_t outlen)
 {
-	struct megahal_dict *dummy = NULL;
 	struct megahal_model *model = pers->model;
 	struct megahal_dict *replywords;
 	struct megahal_dict *keywords;
@@ -1345,11 +1348,8 @@ generate_reply(megahal_ctx_t ctx, megahal_personality_t pers, struct megahal_dic
 
 	strcpy(outstr, "I don't know enough to answer you yet!");
 
-	dummy = new_dictionary(ctx);
 	replywords = new_dictionary(ctx);
-	reply(ctx, pers, dummy, replywords);
-	free_dictionary(ctx, dummy);
-	af_free(ctx, dummy);
+	reply(ctx, pers, NULL, replywords);
 
 	if (dissimilar(words, replywords) == true) {
 		make_output(replywords, outstr, outlen);
@@ -1524,7 +1524,7 @@ evaluate_reply(struct megahal_model *model, struct megahal_dict *keys, struct me
 	model->context[0] = model->forward;
 
 	for (i = 0; i < words->size; ++i) {
-		symbol=find_word(model->dictionary, words->entry[i]);
+		symbol = find_word(model->dictionary, words->entry[i]);
 
 		if (find_word(keys, words->entry[i]) != 0) {
 			probability = 0.0f;
@@ -1558,8 +1558,8 @@ evaluate_reply(struct megahal_model *model, struct megahal_dict *keys, struct me
 			count = 0;
 			++num;
 
-			for (j=0; j<model->order; ++j) {
-				if (model->context[j]!=NULL) {
+			for (j = 0; j < model->order; ++j) {
+				if (model->context[j] != NULL) {
 					node = find_symbol(model->context[j], symbol);
 					probability += (float)(node->count) / (float)(model->context[j]->usage);
 					++count;
@@ -1735,7 +1735,6 @@ rnd(int range)
 static int
 babble(megahal_personality_t pers, struct megahal_dict *keys, struct megahal_dict *words)
 {
-	struct megahal_model *model = pers->model;
 	TREE *node;
 	register int i;
 	int count;
@@ -1744,9 +1743,9 @@ babble(megahal_personality_t pers, struct megahal_dict *keys, struct megahal_dic
 	node = NULL;
 
 	/* Select the longest available context. */
-	for (i = 0; i <= model->order; ++i) {
-		if (model->context[i] != NULL) {
-			node=model->context[i];
+	for (i = 0; i <= pers->model->order; ++i) {
+		if (pers->model->context[i] != NULL) {
+			node = pers->model->context[i];
 		}
 	}
 
@@ -1762,10 +1761,10 @@ babble(megahal_personality_t pers, struct megahal_dict *keys, struct megahal_dic
 		 * auxilliary keyword if a normal keyword has already been used. */
 		symbol = node->tree[i]->symbol;
 
-		if ((find_word(keys, model->dictionary->entry[symbol]) != 0) &&
+		if ((find_word(keys, pers->model->dictionary->entry[symbol]) != 0) &&
 		    ((pers->used_key == true) ||
-		     (find_word(pers->aux, model->dictionary->entry[symbol]) == 0)) &&
-		    (word_exists(words, model->dictionary->entry[symbol]) == false)) {
+		     (find_word(pers->aux, pers->model->dictionary->entry[symbol]) == 0)) &&
+		    (word_exists(words, pers->model->dictionary->entry[symbol]) == false)) {
 			pers->used_key = true;
 			break;
 		}
